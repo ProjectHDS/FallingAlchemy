@@ -1,4 +1,4 @@
-package com.example.modid;
+package work.crash.fallingalchemy;
 
 public class Reference {
 
