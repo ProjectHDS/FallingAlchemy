@@ -11,9 +11,12 @@ import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import work.crash.fallingalchemy.condition.ICondition;
 
-import java.util.*;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static work.crash.fallingalchemy.Reference.MOD_ID;
@@ -21,15 +24,14 @@ import static work.crash.fallingalchemy.Reference.MOD_ID;
 @Mod.EventBusSubscriber(modid = MOD_ID)
 public class FallingBlockHandler {
 
-    private static final List<EntityFallingBlock> trackedBlocks = new ArrayList<>();
+    private static final List<WeakReference<EntityFallingBlock>> trackedBlocks = new ArrayList<>();
 
     @SubscribeEvent
     public static void onEntityJoinWorld(EntityJoinWorldEvent event) {
-        if (event.getEntity() instanceof EntityFallingBlock) {
-            EntityFallingBlock block = (EntityFallingBlock) event.getEntity();
+        if (event.getEntity() instanceof EntityFallingBlock block) {
             Block blockType = block.getBlock().getBlock();
             if (FallingAlchemyTweaker.RULES.containsKey(blockType)) {
-                trackedBlocks.add(block);
+                trackedBlocks.add(new WeakReference<>(block));
             }
         }
     }
@@ -37,11 +39,11 @@ public class FallingBlockHandler {
     @SubscribeEvent
     public static void onWorldTick(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END && !event.world.isRemote) {
-            var iterator = trackedBlocks.iterator();
+            Iterator<WeakReference<EntityFallingBlock>> iterator = trackedBlocks.iterator();
 
             while (iterator.hasNext()) {
-                EntityFallingBlock block = iterator.next();
-                if (block.isDead) {
+                EntityFallingBlock block = iterator.next().get();
+                if (block == null || block.isDead) {
                     BlockPos pos = new BlockPos(block.posX, block.posY, block.posZ);
                     if (event.world.getBlockState(pos).getBlock() == block.getBlock().getBlock()) {
                         processConversion(event.world, pos, block.getBlock().getBlock());
@@ -54,35 +56,34 @@ public class FallingBlockHandler {
 
     private static void processConversion(World world, BlockPos pos, Block triggerBlock) {
         List<FallingAlchemyTweaker.ConversionRule> rules = FallingAlchemyTweaker.RULES.getOrDefault(triggerBlock, Collections.emptyList());
-        rules: for (FallingAlchemyTweaker.ConversionRule rule : rules) {
+
+        // 按优先级排序
+        List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream()
+                .sorted(FallingAlchemyTweaker.ConversionRule::compareTo)
+                .collect(Collectors.toList());
+
+        for (FallingAlchemyTweaker.ConversionRule rule : sortedRules) {
             // 条件检查
-            for (ICondition condition : rule.conditions) {
-                if (!condition.test(world, pos)) {
-                    continue rules;
-                }
-            }
+            boolean conditionsMet = rule.conditions.stream()
+                    .allMatch(cond -> cond.test(world, pos));
+            if (!conditionsMet) continue;
 
             // 成功率判定
             boolean success = world.rand.nextFloat() <= rule.successChance;
             //spawnParticles(world, pos, success ? rule.successParticles : rule.failParticles);
+            if (!success) continue;
 
-            if (!success) {
-                continue;
-            }
-
-            // 消耗品检测
+            // 检测范围内物品
             AxisAlignedBB area = new AxisAlignedBB(pos).grow(rule.radius);
             List<EntityItem> items = world.getEntitiesWithinAABB(EntityItem.class, area)
                     .stream()
-                    .filter(e -> e.getItem().getItem() == rule.consumedItem)
+                    .filter(e -> rule.matches(e.getItem())) // 使用新的匹配方法
                     .collect(Collectors.toList());
 
             int total = items.stream().mapToInt(e -> e.getItem().getCount()).sum();
-            if (total < rule.requiredCount) {
-                continue;
-            }
+            if (total < rule.requiredCount) continue;
 
-            // 执行转换逻辑
+            // 执行消耗
             int remaining = rule.requiredCount;
             for (EntityItem item : items) {
                 ItemStack stack = item.getItem();
@@ -93,34 +94,38 @@ public class FallingBlockHandler {
                 if (stack.isEmpty()) {
                     item.setDead();
                 } else {
-                    item.setItem(stack); // 更新剩余数量
+                    item.setItem(stack);
                 }
 
                 if (remaining <= 0) break;
             }
 
-            // 生成所有产物
+            // 生成产物
+            int multiplier = total / rule.requiredCount;
             rule.outputs.forEach(output -> {
-                // 数量计算（考虑成功率）
-                int multiplier = (total / rule.requiredCount) * (world.rand.nextFloat() <= rule.successChance ? 1 : 0);
                 ItemStack spawnedStack = output.copy();
                 spawnedStack.setCount(spawnedStack.getCount() * multiplier);
 
                 EntityItem newItem = new EntityItem(
-                        world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
+                        world,
+                        pos.getX() + 0.5,
+                        pos.getY() + 0.2,
+                        pos.getZ() + 0.5,
                         spawnedStack
                 );
                 newItem.setDefaultPickupDelay();
+                newItem.motionY = 0.1;  // 添加微小动量
                 world.spawnEntity(newItem);
             });
 
-            // 方块保留判定
             if (world.rand.nextFloat() >= rule.keepBlockChance) {
                 world.setBlockToAir(pos);
             }
+
             break;
         }
     }
+
 
     /*private static void spawnParticles(World world, BlockPos pos, ParticleSettings settings) {
         if (settings == null) return;
