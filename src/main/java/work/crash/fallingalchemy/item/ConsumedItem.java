@@ -1,4 +1,4 @@
-﻿package work.crash.fallingalchemy;
+package work.crash.fallingalchemy.item;
 
 import crafttweaker.annotations.ZenRegister;
 import crafttweaker.api.item.IIngredient;
@@ -16,9 +16,9 @@ import java.util.List;
 @ZenClass("mods.fallingalchemy.ConsumedItem")
 public class ConsumedItem {
     final IIngredient ingredient;
-    final int requiredCount;
+    public final int requiredCount;
     final boolean matchNBT;
-    final boolean fuzzyNBT; // 新增模糊匹配标志
+    final boolean fuzzyNBT;
 
     public ConsumedItem(IIngredient ingredient, int count, boolean matchNBT, boolean fuzzyNBT) {
         this.ingredient = ingredient;
@@ -35,8 +35,7 @@ public class ConsumedItem {
             ItemStack matchStack = CraftTweakerMC.getItemStack(ctStack);
 
             // 基础物品匹配
-            if (!OreDictionary.itemMatches(targetStack, matchStack, false))
-                continue;
+            if (!OreDictionary.itemMatches(targetStack, matchStack, false)) continue;
 
             // NBT处理逻辑
             if (matchNBT) {

@@ -1,4 +1,4 @@
-package work.crash.fallingalchemy;
+package work.crash.fallingalchemy.handler;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityFallingBlock;
@@ -11,6 +11,8 @@ import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import work.crash.fallingalchemy.modsupport.FallingAlchemyTweaker;
+import work.crash.fallingalchemy.item.ConsumedItem;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -57,15 +59,11 @@ public class FallingBlockHandler {
     private static void processConversion(World world, BlockPos pos, Block triggerBlock) {
         List<FallingAlchemyTweaker.ConversionRule> rules = FallingAlchemyTweaker.RULES.getOrDefault(triggerBlock, Collections.emptyList());
 
-        List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream()
-                .sorted(FallingAlchemyTweaker.ConversionRule::compareTo)
-                .collect(Collectors.toList());
+        List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream().sorted(FallingAlchemyTweaker.ConversionRule::compareTo).collect(Collectors.toList());
 
         ruleLoop:
         for (FallingAlchemyTweaker.ConversionRule rule : sortedRules) {
             if (!rule.conditions.stream().allMatch(cond -> cond.test(world, pos))) continue;
-
-            if (world.rand.nextFloat() > rule.successChance) continue;
 
             AxisAlignedBB area = new AxisAlignedBB(pos).grow(rule.radius);
             List<EntityItem> allItems = world.getEntitiesWithinAABB(EntityItem.class, area);
@@ -90,9 +88,7 @@ public class FallingBlockHandler {
             // 扣除每个消耗品
             for (ConsumedItem consumed : rule.consumedItems) {
                 int required = consumed.requiredCount * multiplier;
-                List<EntityItem> matchingItems = allItems.stream()
-                        .filter(item -> consumed.matches(item.getItem()))
-                        .collect(Collectors.toList());
+                List<EntityItem> matchingItems = allItems.stream().filter(item -> consumed.matches(item.getItem())).collect(Collectors.toList());
 
                 int remaining = required;
                 for (EntityItem item : matchingItems) {
@@ -111,29 +107,28 @@ public class FallingBlockHandler {
                 }
             }
 
+            if (world.rand.nextFloat() > rule.successChance) {
+                rule.playFailureSound(world, pos); // 成功率判定失败
+                continue;
+            }
+
             // 生成产物
             int finalMultiplier = multiplier;
             rule.outputs.forEach(output -> {
                 ItemStack spawnedStack = output.copy();
                 spawnedStack.setCount(spawnedStack.getCount() * finalMultiplier);
 
-                EntityItem newItem = new EntityItem(
-                        world,
-                        pos.getX() + 0.5,
-                        pos.getY() + 0.2,
-                        pos.getZ() + 0.5,
-                        spawnedStack
-                );
+                EntityItem newItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 0.2, pos.getZ() + 0.5, spawnedStack);
                 newItem.setDefaultPickupDelay();
                 newItem.motionY = 0.1;
                 world.spawnEntity(newItem);
             });
-
+            rule.playSuccessSound(world, pos);
             if (world.rand.nextFloat() >= rule.keepBlockChance) {
                 world.setBlockToAir(pos);
             }
 
-            break; // 仅执行第一个匹配的规则
+            break;
         }
     }
 }

@@ -1,4 +1,4 @@
-package work.crash.fallingalchemy;
+package work.crash.fallingalchemy.modsupport;
 
 import crafttweaker.CraftTweakerAPI;
 import crafttweaker.annotations.ZenRegister;
@@ -9,11 +9,16 @@ import net.minecraft.block.Block;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundCategory;
+import net.minecraft.util.SoundEvent;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.world.World;
 import stanhebben.zenscript.annotations.Optional;
 import stanhebben.zenscript.annotations.ZenClass;
 import stanhebben.zenscript.annotations.ZenMethod;
 import work.crash.fallingalchemy.condition.ICondition;
+import work.crash.fallingalchemy.item.ConsumedItem;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,8 +50,15 @@ public class FallingAlchemyTweaker {
             IItemStack[] outputs,
             @Optional double successChance,
             @Optional double keepBlockChance,
-            @Optional int priority
+            @Optional int priority,
+            @Optional String successSound,  // 新增音效参数
+            @Optional float successVolume,
+            @Optional float successPitch,
+            @Optional String failureSound,
+            @Optional float failureVolume,
+            @Optional float failurePitch
     ) {
+
         ItemStack mcFalling = CraftTweakerMC.getItemStack(fallingBlock);
         Block block = (mcFalling.getItem() instanceof ItemBlock) ?
                 ((ItemBlock) mcFalling.getItem()).getBlock() : null;
@@ -67,6 +79,13 @@ public class FallingAlchemyTweaker {
         float keep = (float) MathHelper.clamp(keepBlockChance, 0.0, 1.0);
         int finalPriority = priority;
 
+        SoundEvent successSd = parseSound(successSound);
+        SoundEvent failureSd = parseSound(failureSound);
+        float sVol = MathHelper.clamp(successVolume, 0.1f, 2.0f);
+        float sPitch = MathHelper.clamp(successPitch, 0.5f, 2.0f);
+        float fVol = MathHelper.clamp(failureVolume, 0.1f, 2.0f);
+        float fPitch = MathHelper.clamp(failurePitch, 0.5f, 2.0f);
+
         ConversionRule rule = new ConversionRule(
                 block,
                 Arrays.asList(consumedItems),
@@ -74,24 +93,40 @@ public class FallingAlchemyTweaker {
                 mcOutputs,
                 success,
                 keep,
-                finalPriority
+                finalPriority,
+                successSd, sVol, sPitch,
+                failureSd, fVol, fPitch
         );
 
         return new ConversionBuilder(rule);
     }
 
+    private static SoundEvent parseSound(String soundName) {
+        if (soundName == null || soundName.isEmpty()) return null;
+        ResourceLocation res = new ResourceLocation(soundName);
+        return SoundEvent.REGISTRY.getObject(res);
+    }
+
     public static class ConversionRule implements Comparable<ConversionRule> {
         final Block triggerBlock;
-        final float radius;
-        final List<ConsumedItem> consumedItems; // 使用List存储多个消耗条件
-        final float successChance;
-        final float keepBlockChance;
-        final List<ItemStack> outputs;
-        final List<ICondition> conditions = new ArrayList<>();
+        public final float radius;
+        public final List<ConsumedItem> consumedItems; // 使用List存储多个消耗条件
+        public final float successChance;
+        public final float keepBlockChance;
+        public final List<ItemStack> outputs;
+        public final List<ICondition> conditions = new ArrayList<>();
         final int priority;
+        SoundEvent successSound;
+        float successVolume;
+        float successPitch;
+        SoundEvent failureSound;
+        float failureVolume;
+        float failurePitch;
 
-        public ConversionRule(Block trigger, List<ConsumedItem> consumedItems,float radius,
-                              List<ItemStack> output, float success, float keep, int priority) {
+        public ConversionRule(Block trigger, List<ConsumedItem> consumedItems, float radius,
+                              List<ItemStack> output, float success, float keep, int priority,
+                              SoundEvent successSound, float successVolume, float successPitch,
+                              SoundEvent failureSound, float failureVolume, float failurePitch) {
             this.triggerBlock = trigger;
             this.consumedItems = consumedItems;
             this.radius = radius;
@@ -99,6 +134,26 @@ public class FallingAlchemyTweaker {
             this.successChance = success;
             this.keepBlockChance = keep;
             this.priority = priority;
+            this.successSound = successSound;
+            this.successVolume = successVolume;
+            this.successPitch = successPitch;
+            this.failureSound = failureSound;
+            this.failureVolume = failureVolume;
+            this.failurePitch = failurePitch;
+        }
+
+        public void playSuccessSound(World world, BlockPos pos) {
+            if (successSound != null) {
+                world.playSound(null, pos, successSound, SoundCategory.BLOCKS,
+                        successVolume, successPitch);
+            }
+        }
+
+        public void playFailureSound(World world, BlockPos pos) {
+            if (failureSound != null) {
+                world.playSound(null, pos, failureSound, SoundCategory.BLOCKS,
+                        failureVolume, failurePitch);
+            }
         }
 
         // 优先级排序（降序）
@@ -128,11 +183,41 @@ public class FallingAlchemyTweaker {
         }
 
         @ZenMethod
+        public ConversionBuilder setSuccessSound(String soundName,
+                                                 @Optional float volume,
+                                                 @Optional float pitch) {
+            this.rule.successSound = parseSound(soundName);
+            this.rule.successVolume = MathHelper.clamp(volume, 0.1f, 2.0f);
+            this.rule.successPitch = MathHelper.clamp(pitch, 0.5f, 2.0f);
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setFailureSound(String soundName,
+                                                 @Optional float volume,
+                                                 @Optional float pitch) {
+            this.rule.failureSound = parseSound(soundName);
+            this.rule.failureVolume = MathHelper.clamp(volume, 0.1f, 2.0f);
+            this.rule.failurePitch = MathHelper.clamp(pitch, 0.5f, 2.0f);
+            return this;
+        }
+
+        @ZenMethod
         public ConversionBuilder addTimeCondition(int min, @Optional int max) {
             int finalMax = max >= 0 ? max : min;
             rule.conditions.add((world, pos) -> {
                 long time = world.getWorldTime() % 24000;
                 return time >= min && time <= finalMax;
+            });
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder addHeightCondition(int min, @Optional int max) {
+            int finalMax = max >= 0 ? max : min;
+            rule.conditions.add((world, pos) -> {
+                int height = pos.getY();
+                return height >= min && height <= finalMax;
             });
             return this;
         }
