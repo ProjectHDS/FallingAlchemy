@@ -35,7 +35,7 @@ public class FallingAlchemyTweaker {
     @ZenMethod
     public static ConsumedItem createConsumedItem(
             IIngredient ingredient,
-            int requiredCount,
+            @Optional int requiredCount,
             @Optional boolean matchNBT,
             @Optional boolean fuzzyNBT
     ) {
@@ -209,6 +209,12 @@ public class FallingAlchemyTweaker {
                 long time = world.getWorldTime() % 24000;
                 return time >= min && time <= finalMax;
             });
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder addMoonPhaseCondition(int moonPhase) {
+            rule.conditions.add(((world, pos) -> moonPhase == world.getMoonPhase()));
             return this;
         }
 
