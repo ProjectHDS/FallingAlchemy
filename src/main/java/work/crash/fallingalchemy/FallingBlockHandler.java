@@ -57,54 +57,65 @@ public class FallingBlockHandler {
     private static void processConversion(World world, BlockPos pos, Block triggerBlock) {
         List<FallingAlchemyTweaker.ConversionRule> rules = FallingAlchemyTweaker.RULES.getOrDefault(triggerBlock, Collections.emptyList());
 
-        // 按优先级排序
         List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream()
                 .sorted(FallingAlchemyTweaker.ConversionRule::compareTo)
                 .collect(Collectors.toList());
 
+        ruleLoop:
         for (FallingAlchemyTweaker.ConversionRule rule : sortedRules) {
-            // 条件检查
-            boolean conditionsMet = rule.conditions.stream()
-                    .allMatch(cond -> cond.test(world, pos));
-            if (!conditionsMet) continue;
+            if (!rule.conditions.stream().allMatch(cond -> cond.test(world, pos))) continue;
 
-            // 成功率判定
-            boolean success = world.rand.nextFloat() <= rule.successChance;
-            //spawnParticles(world, pos, success ? rule.successParticles : rule.failParticles);
-            if (!success) continue;
+            if (world.rand.nextFloat() > rule.successChance) continue;
 
-            // 检测范围内物品
             AxisAlignedBB area = new AxisAlignedBB(pos).grow(rule.radius);
-            List<EntityItem> items = world.getEntitiesWithinAABB(EntityItem.class, area)
-                    .stream()
-                    .filter(e -> rule.matches(e.getItem())) // 使用新的匹配方法
-                    .collect(Collectors.toList());
+            List<EntityItem> allItems = world.getEntitiesWithinAABB(EntityItem.class, area);
 
-            int total = items.stream().mapToInt(e -> e.getItem().getCount()).sum();
-            if (total < rule.requiredCount) continue;
-
-            // 执行消耗
-            int remaining = rule.requiredCount;
-            for (EntityItem item : items) {
-                ItemStack stack = item.getItem();
-                int taken = Math.min(remaining, stack.getCount());
-                stack.shrink(taken);
-                remaining -= taken;
-
-                if (stack.isEmpty()) {
-                    item.setDead();
-                } else {
-                    item.setItem(stack);
+            // 计算每个消耗品的可用次数
+            int multiplier = Integer.MAX_VALUE;
+            for (ConsumedItem consumed : rule.consumedItems) {
+                int total = 0;
+                for (EntityItem item : allItems) {
+                    if (consumed.matches(item.getItem())) {
+                        total += item.getItem().getCount();
+                    }
                 }
+                if (total < consumed.requiredCount) {
+                    continue ruleLoop; // 不满足条件，跳过该规则
+                }
+                multiplier = Math.min(multiplier, total / consumed.requiredCount);
+            }
 
-                if (remaining <= 0) break;
+            if (multiplier <= 0) continue;
+
+            // 扣除每个消耗品
+            for (ConsumedItem consumed : rule.consumedItems) {
+                int required = consumed.requiredCount * multiplier;
+                List<EntityItem> matchingItems = allItems.stream()
+                        .filter(item -> consumed.matches(item.getItem()))
+                        .collect(Collectors.toList());
+
+                int remaining = required;
+                for (EntityItem item : matchingItems) {
+                    ItemStack stack = item.getItem();
+                    int taken = Math.min(remaining, stack.getCount());
+                    stack.shrink(taken);
+                    remaining -= taken;
+
+                    if (stack.isEmpty()) {
+                        item.setDead();
+                    } else {
+                        item.setItem(stack);
+                    }
+
+                    if (remaining <= 0) break;
+                }
             }
 
             // 生成产物
-            int multiplier = total / rule.requiredCount;
+            int finalMultiplier = multiplier;
             rule.outputs.forEach(output -> {
                 ItemStack spawnedStack = output.copy();
-                spawnedStack.setCount(spawnedStack.getCount() * multiplier);
+                spawnedStack.setCount(spawnedStack.getCount() * finalMultiplier);
 
                 EntityItem newItem = new EntityItem(
                         world,
@@ -114,7 +125,7 @@ public class FallingBlockHandler {
                         spawnedStack
                 );
                 newItem.setDefaultPickupDelay();
-                newItem.motionY = 0.1;  // 添加微小动量
+                newItem.motionY = 0.1;
                 world.spawnEntity(newItem);
             });
 
@@ -122,34 +133,7 @@ public class FallingBlockHandler {
                 world.setBlockToAir(pos);
             }
 
-            break;
+            break; // 仅执行第一个匹配的规则
         }
     }
-
-
-    /*private static void spawnParticles(World world, BlockPos pos, ParticleSettings settings) {
-        if (settings == null) return;
-
-        for (int i = 0; i < settings.count; i++) {
-            double xOffset = world.rand.nextGaussian() * 0.2;
-            double yOffset = world.rand.nextGaussian() * 0.2;
-            double zOffset = world.rand.nextGaussian() * 0.2;
-
-            double x = pos.getX() + 0.5 + xOffset;
-            double y = pos.getY() + 1 + yOffset;
-            double z = pos.getZ() + 0.5 + zOffset;
-
-            switch (settings.type.getParticleID()) {
-                case 2: // REDSTONE
-                    float r = settings.color[0] / 255.0f;
-                    float g = settings.color[1] / 255.0f;
-                    float b = settings.color[2] / 255.0f;
-                    world.spawnParticle(EnumParticleTypes.REDSTONE, x, y, z, r, g, b);
-                    break;
-                default:
-                    world.spawnParticle(settings.type, x, y, z, 0, 0, 0);
-                    break;
-            }
-        }
-    }*/
 }
