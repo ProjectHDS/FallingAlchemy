@@ -21,7 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static work.crash.fallingalchemy.Reference.MOD_ID;
+import static work.crash.fallingalchemy.Tags.MOD_ID;
 
 @Mod.EventBusSubscriber(modid = MOD_ID)
 public class FallingBlockHandler {
