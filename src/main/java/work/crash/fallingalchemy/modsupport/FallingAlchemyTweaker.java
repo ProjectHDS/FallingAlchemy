@@ -51,7 +51,9 @@ public class FallingAlchemyTweaker {
             @Optional double successChance,
             @Optional double keepBlockChance,
             @Optional int priority,
-            @Optional String successSound,  // 新增音效参数
+            @Optional double displacement,
+            @Optional boolean additionalProducts,
+            @Optional String successSound,
             @Optional float successVolume,
             @Optional float successPitch,
             @Optional String failureSound,
@@ -77,7 +79,6 @@ public class FallingAlchemyTweaker {
 
         float success = (float) MathHelper.clamp(successChance, 0.0, 1.0);
         float keep = (float) MathHelper.clamp(keepBlockChance, 0.0, 1.0);
-        int finalPriority = priority;
 
         SoundEvent successSd = parseSound(successSound);
         SoundEvent failureSd = parseSound(failureSound);
@@ -90,10 +91,12 @@ public class FallingAlchemyTweaker {
                 block,
                 Arrays.asList(consumedItems),
                 (float) radius,
+                (float) displacement,
+                additionalProducts,
                 mcOutputs,
                 success,
                 keep,
-                finalPriority,
+                priority,
                 successSd, sVol, sPitch,
                 failureSd, fVol, fPitch
         );
@@ -111,6 +114,8 @@ public class FallingAlchemyTweaker {
         final Block triggerBlock;
         public final float radius;
         public final List<ConsumedItem> consumedItems; // 使用List存储多个消耗条件
+        public final float displacement;
+        public final boolean additionalProducts;
         public final float successChance;
         public final float keepBlockChance;
         public final List<ItemStack> outputs;
@@ -124,13 +129,15 @@ public class FallingAlchemyTweaker {
         float failurePitch;
 
         public ConversionRule(Block trigger, List<ConsumedItem> consumedItems, float radius,
-                              List<ItemStack> output, float success, float keep, int priority,
+                              float displacement, boolean additionalProducts, List<ItemStack> output, float success, float keep, int priority,
                               SoundEvent successSound, float successVolume, float successPitch,
                               SoundEvent failureSound, float failureVolume, float failurePitch) {
             this.triggerBlock = trigger;
             this.consumedItems = consumedItems;
             this.radius = radius;
             this.outputs = output;
+            this.displacement = displacement;
+            this.additionalProducts = additionalProducts;
             this.successChance = success;
             this.keepBlockChance = keep;
             this.priority = priority;

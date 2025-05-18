@@ -15,31 +15,31 @@ import work.crash.fallingalchemy.modsupport.FallingAlchemyTweaker;
 import work.crash.fallingalchemy.item.ConsumedItem;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static work.crash.fallingalchemy.Tags.MOD_ID;
+import static work.crash.fallingalchemy.utils.Math.*;
 
 @Mod.EventBusSubscriber(modid = MOD_ID)
 public class FallingBlockHandler {
 
     private static final List<WeakReference<EntityFallingBlock>> trackedBlocks = new ArrayList<>();
+    private final Dictionary<EntityFallingBlock, BlockPos> blockPosition = new Hashtable<>();
 
     @SubscribeEvent
-    public static void onEntityJoinWorld(EntityJoinWorldEvent event) {
+    public void onEntityJoinWorld(EntityJoinWorldEvent event) {
         if (event.getEntity() instanceof EntityFallingBlock block) {
             Block blockType = block.getBlock().getBlock();
             if (FallingAlchemyTweaker.RULES.containsKey(blockType)) {
                 trackedBlocks.add(new WeakReference<>(block));
+                blockPosition.put(block, block.getPosition());
             }
         }
     }
 
     @SubscribeEvent
-    public static void onWorldTick(TickEvent.WorldTickEvent event) {
+    public void onWorldTick(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END && !event.world.isRemote) {
             Iterator<WeakReference<EntityFallingBlock>> iterator = trackedBlocks.iterator();
 
@@ -48,7 +48,7 @@ public class FallingBlockHandler {
                 if (block == null || block.isDead) {
                     BlockPos pos = new BlockPos(block.posX, block.posY, block.posZ);
                     if (event.world.getBlockState(pos).getBlock() == block.getBlock().getBlock()) {
-                        processConversion(event.world, pos, block.getBlock().getBlock());
+                        processConversion(event.world, blockPosition.get(block), pos, block.getBlock().getBlock());
                     }
                     iterator.remove();
                 }
@@ -56,7 +56,7 @@ public class FallingBlockHandler {
         }
     }
 
-    private static void processConversion(World world, BlockPos pos, Block triggerBlock) {
+    private void processConversion(World world, BlockPos oriPos, BlockPos pos, Block triggerBlock) {
         List<FallingAlchemyTweaker.ConversionRule> rules = FallingAlchemyTweaker.RULES.getOrDefault(triggerBlock, Collections.emptyList());
 
         List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream().sorted(FallingAlchemyTweaker.ConversionRule::compareTo).collect(Collectors.toList());
@@ -84,6 +84,15 @@ public class FallingBlockHandler {
             }
 
             if (multiplier <= 0) continue;
+            // 避免无消耗物时multiplier异常
+            if (rule.consumedItems.isEmpty()) {
+                multiplier = 1;
+            }
+
+            // 计算位移是否满足要求
+            if (positionDistance(oriPos, pos) < rule.displacement) {
+                continue;
+            }
 
             // 扣除每个消耗品
             for (ConsumedItem consumed : rule.consumedItems) {
@@ -116,14 +125,19 @@ public class FallingBlockHandler {
             int finalMultiplier = multiplier;
             rule.outputs.forEach(output -> {
                 ItemStack spawnedStack = output.copy();
-                spawnedStack.setCount(spawnedStack.getCount() * finalMultiplier);
-
+                //
+                if (rule.displacement > 0 && positionDistance(oriPos, pos) > rule.displacement && rule.additionalProducts) {
+                    spawnedStack.setCount((int) ((positionDistance(oriPos, pos) - rule.displacement) + (spawnedStack.getCount() * finalMultiplier)));
+                } else {
+                    spawnedStack.setCount(spawnedStack.getCount() * finalMultiplier);
+                }
                 EntityItem newItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 0.2, pos.getZ() + 0.5, spawnedStack);
                 newItem.setDefaultPickupDelay();
                 newItem.motionY = 0.1;
                 world.spawnEntity(newItem);
             });
             rule.playSuccessSound(world, pos);
+            // 是否消耗方块
             if (world.rand.nextFloat() >= rule.keepBlockChance) {
                 world.setBlockToAir(pos);
             }

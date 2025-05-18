@@ -29,6 +29,7 @@
 ⚙️ **高级配置**
 - 配方成功率 (`0.0~1.0`)
 - 方块保留几率 (`0.0~1.0`)
+- 方块位移以及根据位移多出需求的量生成相应额外量的产物
 - 检测半径动态调整
 - 失败/成功音效定制化
 - NBT模糊匹配 (`fuzzyNBT`)
@@ -67,6 +68,8 @@ val builder = FallingAlchemy.addConversion(
     successChance as double,         // 成功率（可选，默认1.0）
     keepBlockChance as double,       // 方块保留率（可选，默认0.0）
     priority as int,                 // 优先级（可选，默认0）
+    displacement as double,          // 最小位移要求
+    additionalProducts as boolean,   // 是否根据额外位移生成额外产物
     successSound as string,          // 成功音效（可选）
     successVolume as float,          // 成功音量（0.1-2.0）
     successPitch as float,           // 成功音高（0.5-2.0）
@@ -147,6 +150,8 @@ val builder = FallingAlchemy.addConversion(
     0.75,
     0.2,
     10,
+    8,
+    true,
     "minecraft:entity.endermen.teleport", 1.0, 1.2,
     "minecraft:block.glass.break", 0.8, 0.9
 );
