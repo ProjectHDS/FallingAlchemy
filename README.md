@@ -45,15 +45,6 @@
 
 ---
 
-## 安装要求
-1. Minecraft 1.12.2
-2. Cleanroom版本: **0.3.0+**
-3. 必须模组:
-    - [CraftTweaker](https://www.curseforge.com/minecraft/mc-mods/crafttweaker) (版本4.1.20+)
-4. 将本模组放入 `mods/` 文件夹
-
----
-
 ## 配置指南
 ### 基础语法
 ```zenscript
