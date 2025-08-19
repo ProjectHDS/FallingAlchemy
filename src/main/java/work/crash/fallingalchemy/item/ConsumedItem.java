@@ -15,7 +15,7 @@ import java.util.List;
 @ZenRegister
 @ZenClass("mods.fallingalchemy.ConsumedItem")
 public class ConsumedItem {
-    final IIngredient ingredient;
+    public final IIngredient ingredient;
     public final int requiredCount;
     final boolean matchNBT;
     final boolean fuzzyNBT;

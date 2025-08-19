@@ -111,7 +111,7 @@ public class FallingAlchemyTweaker {
     }
 
     public static class ConversionRule implements Comparable<ConversionRule> {
-        final Block triggerBlock;
+        public final Block triggerBlock;
         public final float radius;
         public final List<ConsumedItem> consumedItems; // 使用List存储多个消耗条件
         public final float displacement;
