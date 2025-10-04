@@ -17,8 +17,8 @@ import java.util.List;
 public class ConsumedItem {
     public final IIngredient ingredient;
     public final int requiredCount;
-    final boolean matchNBT;
-    final boolean fuzzyNBT;
+    public final boolean matchNBT;
+    public final boolean fuzzyNBT;
 
     public ConsumedItem(IIngredient ingredient, int count, boolean matchNBT, boolean fuzzyNBT) {
         this.ingredient = ingredient;

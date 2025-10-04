@@ -110,16 +110,29 @@ public class FallingAlchemyTweaker {
         return SoundEvent.REGISTRY.getObject(res);
     }
 
+    public static class ConditionInfo {
+        public final ICondition condition;
+        public final String type;
+        public final String description;
+
+        public ConditionInfo(ICondition condition, String type, String description) {
+            this.condition = condition;
+            this.type = type;
+            this.description = description;
+        }
+    }
+
     public static class ConversionRule implements Comparable<ConversionRule> {
         public final Block triggerBlock;
         public final float radius;
-        public final List<ConsumedItem> consumedItems; // 使用List存储多个消耗条件
+        public final List<ConsumedItem> consumedItems;
         public final float displacement;
         public final boolean additionalProducts;
         public final float successChance;
         public final float keepBlockChance;
         public final List<ItemStack> outputs;
         public final List<ICondition> conditions = new ArrayList<>();
+        public final List<ConditionInfo> conditionInfos = new ArrayList<>();
         final int priority;
         SoundEvent successSound;
         float successVolume;
@@ -179,13 +192,13 @@ public class FallingAlchemyTweaker {
             this.rule = rule;
         }
 
-        // 添加生物群系条件（保持不变）
         @ZenMethod
         public ConversionBuilder addBiomeCondition(String biomeId) {
-            rule.conditions.add((world, pos) ->
+            ICondition condition = (world, pos) ->
                     world.getBiome(pos).getRegistryName()
-                            .equals(new ResourceLocation(biomeId))
-            );
+                            .equals(new ResourceLocation(biomeId));
+            rule.conditions.add(condition);
+            rule.conditionInfos.add(new ConditionInfo(condition, "biome", biomeId));
             return this;
         }
 
@@ -212,36 +225,54 @@ public class FallingAlchemyTweaker {
         @ZenMethod
         public ConversionBuilder addTimeCondition(int min, @Optional int max) {
             int finalMax = max >= 0 ? max : min;
-            rule.conditions.add((world, pos) -> {
+            ICondition condition = (world, pos) -> {
                 long time = world.getWorldTime() % 24000;
                 return time >= min && time <= finalMax;
-            });
+            };
+            rule.conditions.add(condition);
+
+            String timeKey;
+            if (min >= 0 && finalMax <= 6000) {
+                timeKey = "morning";
+            } else if (min >= 6000 && finalMax <= 12000) {
+                timeKey = "day";
+            } else if (min >= 12000 && finalMax <= 18000) {
+                timeKey = "evening";
+            } else if (min >= 18000 || finalMax <= 6000) {
+                timeKey = "night";
+            } else {
+                timeKey = "custom:" + min + "-" + finalMax;
+            }
+            rule.conditionInfos.add(new ConditionInfo(condition, "time", timeKey));
             return this;
         }
 
         @ZenMethod
         public ConversionBuilder addMoonPhaseCondition(int moonPhase) {
-            rule.conditions.add(((world, pos) -> moonPhase == world.getMoonPhase()));
+            ICondition condition = ((world, pos) -> moonPhase == world.getMoonPhase());
+            rule.conditions.add(condition);
+
+            rule.conditionInfos.add(new ConditionInfo(condition, "moon", String.valueOf(moonPhase)));
             return this;
         }
 
         @ZenMethod
         public ConversionBuilder addHeightCondition(int min, @Optional int max) {
             int finalMax = max >= 0 ? max : min;
-            rule.conditions.add((world, pos) -> {
+            ICondition condition = (world, pos) -> {
                 int height = pos.getY();
                 return height >= min && height <= finalMax;
-            });
+            };
+            rule.conditions.add(condition);
+            rule.conditionInfos.add(new ConditionInfo(condition, "height", min + "-" + finalMax));
             return this;
         }
 
-        // 优化后的天气条件方法
         @ZenMethod
         public ConversionBuilder addWeatherCondition(
                 @Optional boolean requireRaining,
                 @Optional boolean requireThundering) {
 
-            // 自动修正非法参数组合
             if (requireThundering && !requireRaining) {
                 CraftTweakerAPI.logWarning("Thundering requires raining! Auto-correcting...");
                 requireRaining = true;
@@ -250,14 +281,25 @@ public class FallingAlchemyTweaker {
             final boolean finalRequireRaining = requireRaining;
             final boolean finalRequireThundering = requireThundering;
 
-            rule.conditions.add((world, pos) -> {
+            ICondition condition = (world, pos) -> {
                 boolean isRaining = world.isRaining();
                 boolean isThundering = world.isThundering();
 
                 return (finalRequireThundering && isThundering) ||
                         (finalRequireRaining && isRaining && !finalRequireThundering) ||
                         (!finalRequireRaining && !isRaining);
-            });
+            };
+            rule.conditions.add(condition);
+
+            String weatherKey;
+            if (finalRequireThundering) {
+                weatherKey = "thunder";
+            } else if (finalRequireRaining) {
+                weatherKey = "rain";
+            } else {
+                weatherKey = "clear";
+            }
+            rule.conditionInfos.add(new ConditionInfo(condition, "weather", weatherKey));
             return this;
         }
 

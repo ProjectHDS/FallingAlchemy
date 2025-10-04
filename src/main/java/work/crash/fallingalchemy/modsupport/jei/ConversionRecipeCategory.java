@@ -26,10 +26,12 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
     private final String localizedName;
 
     public ConversionRecipeCategory(IGuiHelper guiHelper) {
-        ResourceLocation location = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei.png");
-        background = guiHelper.createDrawable(location, 0, 0, WIDTH, HEIGHT);
+        ResourceLocation backgroundRaw = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei_bg.png");
+        background = guiHelper.createDrawable(backgroundRaw, 0, 0, WIDTH, HEIGHT);
+
         localizedName = I18n.format("jei.category.fallingalchemy.conversion");
-        icon = guiHelper.createDrawable(location, 140, 0, 16, 16);
+        ResourceLocation iconRaw = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei_icon.png");
+        icon = guiHelper.createDrawable(iconRaw, 0, 0, 16, 16);
     }
 
     @Nonnull
@@ -90,8 +92,8 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
 
     @Override
     public void drawExtras(@Nonnull Minecraft minecraft) {
-        String chanceText = I18n.format("jei.fallingalchemy.success_chance");
-        minecraft.fontRenderer.drawString(chanceText, 50, 20, 0xFF404040);
+        /*String chanceText = I18n.format("jei.fallingalchemy.success_chance");
+        minecraft.fontRenderer.drawString(chanceText, 50, 20, 0xFF404040);*/
 
         //TODO: Condition icons?
     }
