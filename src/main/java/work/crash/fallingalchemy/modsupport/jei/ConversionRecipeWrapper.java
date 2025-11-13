@@ -56,30 +56,30 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
     @Override
     public void drawInfo(@Nonnull Minecraft minecraft, int recipeWidth, int recipeHeight, int mouseX, int mouseY) {
         FontRenderer fontRenderer = minecraft.fontRenderer;
-        int yOffset = 20;
+        int yOffset = 55;
 
         String successText = I18n.format("jei.fallingalchemy.success_chance") + " " + String.format("%.1f%%", rule.successChance * 100);
-        fontRenderer.drawString(successText, 45, yOffset, 0xFF404040);
+        fontRenderer.drawString(successText, 5, yOffset, 0xFF404040);
         yOffset += 10;
 
         if (rule.keepBlockChance > 0) {
             String keepText = I18n.format("jei.fallingalchemy.keep_chance", String.format("%.1f%%", rule.keepBlockChance * 100));
-            fontRenderer.drawString(keepText, 45, yOffset, 0xFF404040);
+            fontRenderer.drawString(keepText, 5, yOffset, 0xFF404040);
             yOffset += 10;
         }
 
         String radiusText = I18n.format("jei.fallingalchemy.radius") + " " + String.format("%.1f", rule.radius);
-        fontRenderer.drawString(radiusText, 45, yOffset, 0xFF404040);
+        fontRenderer.drawString(radiusText, 5, yOffset, 0xFF404040);
         yOffset += 10;
 
         if (rule.displacement > 0) {
             String displacementText = I18n.format("jei.fallingalchemy.displacement") + " " + String.format("%.1f", rule.displacement);
-            fontRenderer.drawString(displacementText, 45, yOffset, 0xFF404040);
+            fontRenderer.drawString(displacementText, 5, yOffset, 0xFF404040);
             yOffset += 10;
 
             if (rule.additionalProducts) {
                 String bonusText = I18n.format("jei.fallingalchemy.bonus_products");
-                fontRenderer.drawString(bonusText, 45, yOffset, 0xFF00AA00);
+                fontRenderer.drawString(bonusText, 5, yOffset, 0xFF00AA00);
                 yOffset += 10;
             }
         }
@@ -96,7 +96,7 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
 
         if (!rule.conditions.isEmpty() || hasNBTRequirement) {
             String conditionsText = I18n.format("jei.fallingalchemy.conditions") + " " + totalConditions;
-            fontRenderer.drawString(conditionsText, 5, 65, 0xFF8B4513);
+            fontRenderer.drawString(conditionsText, 5, 5, 0xFF8B4513);
         }
     }
 
@@ -104,7 +104,7 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
     public List<String> getTooltipStrings(int mouseX, int mouseY) {
         List<String> tooltip = new ArrayList<>();
 
-        if (mouseX >= 5 && mouseX <= 140 && mouseY >= 65 && mouseY <= 75) {
+        if (mouseX >= 5 && mouseX <= 140 && mouseY >= 5 && mouseY <= 15) {
             List<String> allConditions = new ArrayList<>();
 
             for (int i = 0; i < rule.conditionInfos.size(); i++) {

@@ -27,7 +27,7 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
 
     public ConversionRecipeCategory(IGuiHelper guiHelper) {
         ResourceLocation backgroundRaw = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei_bg.png");
-        background = guiHelper.createDrawable(backgroundRaw, 0, 0, WIDTH, HEIGHT);
+        background = guiHelper.drawableBuilder(backgroundRaw, 0, 0, WIDTH, HEIGHT).setTextureSize(WIDTH, HEIGHT).build();
 
         localizedName = I18n.format("jei.category.fallingalchemy.conversion");
         ResourceLocation iconRaw = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei_icon.png");
@@ -69,11 +69,11 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
         IGuiItemStackGroup guiItemStacks = recipeLayout.getItemStacks();
 
         List<List<ItemStack>> inputs = ingredients.getInputs(ItemStack.class);
-        guiItemStacks.init(0, true, 20, 20);
+        guiItemStacks.init(0, true, 20, 16);
         guiItemStacks.set(0, inputs.get(0));
 
         for (int i = 1; i < inputs.size(); i++) {
-            guiItemStacks.init(i, true, 20 + (i-1)*18, 40);
+            guiItemStacks.init(i, true, 20 + (i-1)*18, 32);
             guiItemStacks.set(i, inputs.get(i));
         }
 
