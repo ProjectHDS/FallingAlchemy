@@ -31,7 +31,7 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
 
         localizedName = I18n.format("jei.category.fallingalchemy.conversion");
         ResourceLocation iconRaw = new ResourceLocation("fallingalchemy", "textures/gui/conversion_jei_icon.png");
-        icon = guiHelper.createDrawable(iconRaw, 0, 0, 16, 16);
+        icon = guiHelper.drawableBuilder(iconRaw, 0, 0, 16, 16).setTextureSize(16, 16).build();
     }
 
     @Nonnull
