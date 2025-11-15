@@ -79,7 +79,7 @@ public class ConversionRecipeCategory implements IRecipeCategory<ConversionRecip
 
         List<List<ItemStack>> outputs = ingredients.getOutputs(ItemStack.class);
         int outputStartX = 100;
-        int outputStartY = 20;
+        int outputStartY = 15;
         int outputsPerRow = 2;
 
         for (int i = 0; i < outputs.size(); i++) {

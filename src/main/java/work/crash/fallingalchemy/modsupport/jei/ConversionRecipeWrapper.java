@@ -3,14 +3,16 @@ package work.crash.fallingalchemy.modsupport.jei;
 import crafttweaker.api.minecraft.CraftTweakerMC;
 import crafttweaker.api.item.IItemStack;
 import mezz.jei.api.ingredients.IIngredients;
+import mezz.jei.api.ingredients.VanillaTypes;
 import mezz.jei.api.recipe.IRecipeWrapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
 import work.crash.fallingalchemy.item.ConsumedItem;
 import work.crash.fallingalchemy.modsupport.FallingAlchemyTweaker;
-import work.crash.fallingalchemy.condition.ICondition;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -19,6 +21,22 @@ import java.util.List;
 public class ConversionRecipeWrapper implements IRecipeWrapper {
 
     private final FallingAlchemyTweaker.ConversionRule rule;
+
+    private static final int ICON_SIZE = 16;
+    private static final int LEFT_COLUMN_X = 20;
+    private static final int RIGHT_COLUMN_X = 100;
+    private static final int TOP_ROW_Y = 50;
+    private static final int BOTTOM_ROW_Y = 66;
+
+    private static final ResourceLocation ICON_SUCCESS =
+            new ResourceLocation("fallingalchemy", "textures/gui/icon_success.png");
+    private static final ResourceLocation ICON_RADIUS =
+            new ResourceLocation("fallingalchemy", "textures/gui/icon_radius.png");
+    private static final ResourceLocation ICON_KEEP =
+            new ResourceLocation("fallingalchemy", "textures/gui/icon_keep.png");
+    private static final ResourceLocation ICON_DISPLACEMENT =
+            new ResourceLocation("fallingalchemy", "textures/gui/icon_displacement.png");
+
 
     public ConversionRecipeWrapper(FallingAlchemyTweaker.ConversionRule rule) {
         this.rule = rule;
@@ -36,8 +54,8 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
             inputs.add(matchingStacks);
         }
 
-        ingredients.setInputLists(ItemStack.class, inputs);
-        ingredients.setOutputs(ItemStack.class, rule.outputs);
+        ingredients.setInputLists(VanillaTypes.ITEM, inputs);
+        ingredients.setOutputs(VanillaTypes.ITEM, rule.outputs);
     }
 
     private List<ItemStack> getMatchingStacks(ConsumedItem consumedItem) {
@@ -56,32 +74,21 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
     @Override
     public void drawInfo(@Nonnull Minecraft minecraft, int recipeWidth, int recipeHeight, int mouseX, int mouseY) {
         FontRenderer fontRenderer = minecraft.fontRenderer;
-        int yOffset = 55;
 
-        String successText = I18n.format("jei.fallingalchemy.success_chance") + " " + String.format("%.1f%%", rule.successChance * 100);
-        fontRenderer.drawString(successText, 5, yOffset, 0xFF404040);
-        yOffset += 10;
+        minecraft.getTextureManager().bindTexture(ICON_SUCCESS);
+        drawIcon(LEFT_COLUMN_X, TOP_ROW_Y);
+
+        minecraft.getTextureManager().bindTexture(ICON_RADIUS);
+        drawIcon(RIGHT_COLUMN_X, TOP_ROW_Y);
 
         if (rule.keepBlockChance > 0) {
-            String keepText = I18n.format("jei.fallingalchemy.keep_chance", String.format("%.1f%%", rule.keepBlockChance * 100));
-            fontRenderer.drawString(keepText, 5, yOffset, 0xFF404040);
-            yOffset += 10;
+            minecraft.getTextureManager().bindTexture(ICON_KEEP);
+            drawIcon(LEFT_COLUMN_X, BOTTOM_ROW_Y);
         }
 
-        String radiusText = I18n.format("jei.fallingalchemy.radius") + " " + String.format("%.1f", rule.radius);
-        fontRenderer.drawString(radiusText, 5, yOffset, 0xFF404040);
-        yOffset += 10;
-
         if (rule.displacement > 0) {
-            String displacementText = I18n.format("jei.fallingalchemy.displacement") + " " + String.format("%.1f", rule.displacement);
-            fontRenderer.drawString(displacementText, 5, yOffset, 0xFF404040);
-            yOffset += 10;
-
-            if (rule.additionalProducts) {
-                String bonusText = I18n.format("jei.fallingalchemy.bonus_products");
-                fontRenderer.drawString(bonusText, 5, yOffset, 0xFF00AA00);
-                yOffset += 10;
-            }
+            minecraft.getTextureManager().bindTexture(ICON_DISPLACEMENT);
+            drawIcon(RIGHT_COLUMN_X, BOTTOM_ROW_Y);
         }
 
         int totalConditions = rule.conditions.size();
@@ -100,18 +107,50 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
         }
     }
 
+    private void drawIcon(int x, int y) {
+        Gui.drawModalRectWithCustomSizedTexture(x, y, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+    }
+
+
     @Override
     public List<String> getTooltipStrings(int mouseX, int mouseY) {
         List<String> tooltip = new ArrayList<>();
+
+        if (isInArea(mouseX, mouseY, LEFT_COLUMN_X, TOP_ROW_Y)) {
+            tooltip.add(I18n.format("jei.fallingalchemy.success_chance"));
+            tooltip.add("§7" + String.format("%.1f%%", rule.successChance * 100));
+            return tooltip;
+        }
+
+        if (isInArea(mouseX, mouseY, RIGHT_COLUMN_X, TOP_ROW_Y)) {
+            tooltip.add(I18n.format("jei.fallingalchemy.radius"));
+            tooltip.add("§7" + String.format("%.1f", rule.radius));
+            return tooltip;
+        }
+
+        if (rule.keepBlockChance > 0 && isInArea(mouseX, mouseY, LEFT_COLUMN_X, BOTTOM_ROW_Y)) {
+            tooltip.add(I18n.format("jei.fallingalchemy.keep_chance", ""));
+            tooltip.add("§7" + String.format("%.1f%%", rule.keepBlockChance * 100));
+            return tooltip;
+        }
+
+        if (rule.displacement > 0 && isInArea(mouseX, mouseY, RIGHT_COLUMN_X, BOTTOM_ROW_Y)) {
+            tooltip.add(I18n.format("jei.fallingalchemy.displacement"));
+            tooltip.add("§7" + String.format("%.1f", rule.displacement));
+            if (rule.additionalProducts) {
+                tooltip.add("");
+                tooltip.add("§a" + I18n.format("jei.fallingalchemy.bonus_products"));
+                tooltip.add("§7" + I18n.format("jei.fallingalchemy.bonus_products.tooltip"));
+            }
+            return tooltip;
+        }
 
         if (mouseX >= 5 && mouseX <= 140 && mouseY >= 5 && mouseY <= 15) {
             List<String> allConditions = new ArrayList<>();
 
             for (int i = 0; i < rule.conditionInfos.size(); i++) {
                 String condDesc = formatConditionDescription(rule.conditionInfos.get(i));
-                if (condDesc != null) {
-                    allConditions.add("§7• " + condDesc);
-                }
+                allConditions.add("§7• " + condDesc);
             }
 
             for (ConsumedItem item : rule.consumedItems) {
@@ -132,14 +171,11 @@ public class ConversionRecipeWrapper implements IRecipeWrapper {
             }
         }
 
-        if (mouseX >= 50 && mouseX <= 140 && mouseY >= 40 && mouseY <= 60 && rule.displacement > 0) {
-            tooltip.add(I18n.format("jei.fallingalchemy.displacement.tooltip"));
-            if (rule.additionalProducts) {
-                tooltip.add(I18n.format("jei.fallingalchemy.bonus_products.tooltip"));
-            }
-        }
-
         return tooltip.isEmpty() ? null : tooltip;
+    }
+
+    private boolean isInArea(int mouseX, int mouseY, int x, int y) {
+        return mouseX >= x && mouseX < x +ICON_SIZE && mouseY >= y && mouseY < y + ICON_SIZE;
     }
 
     private String formatConditionDescription(FallingAlchemyTweaker.ConditionInfo info) {
