@@ -46,6 +46,15 @@ public class FallingAlchemyTweaker {
     public static ConversionBuilder addConversion(
             IItemStack fallingBlock,
             ConsumedItem[] consumedItems,
+            IItemStack[] outputs
+    ) {
+        return addConversion(fallingBlock, consumedItems, 2.0, outputs, 1.0, 0.0, 0, 0.0, false, null, 1.0f, 1.0f, null, 1.0f, 1.0f);
+    }
+
+    @ZenMethod
+    public static ConversionBuilder addConversion(
+            IItemStack fallingBlock,
+            ConsumedItem[] consumedItems,
             double radius,
             IItemStack[] outputs,
             @Optional double successChance,
@@ -70,7 +79,6 @@ public class FallingAlchemyTweaker {
             return null;
         }
 
-        // 转换输出物品
         List<ItemStack> mcOutputs = Arrays.stream(outputs)
                 .map(CraftTweakerMC::getItemStack)
                 .collect(Collectors.toList());
@@ -124,16 +132,23 @@ public class FallingAlchemyTweaker {
 
     public static class ConversionRule implements Comparable<ConversionRule> {
         public final Block triggerBlock;
-        public final float radius;
         public final List<ConsumedItem> consumedItems;
-        public final float displacement;
-        public final boolean additionalProducts;
-        public final float successChance;
-        public final float keepBlockChance;
         public final List<ItemStack> outputs;
+
+        public float radius;
+        public float displacement;
+        public boolean additionalProducts;
+        public float successChance;
+        public float keepBlockChance;
+        public int priority;
+        public boolean onlyOne = false;
+        public boolean rescueItems = false;
+
+        public String id = "";
+
         public final List<ICondition> conditions = new ArrayList<>();
         public final List<ConditionInfo> conditionInfos = new ArrayList<>();
-        final int priority;
+
         SoundEvent successSound;
         float successVolume;
         float successPitch;
@@ -176,12 +191,10 @@ public class FallingAlchemyTweaker {
             }
         }
 
-        // 优先级排序（降序）
         @Override
         public int compareTo(ConversionRule other) {
             return Integer.compare(other.priority, this.priority);
         }
-
     }
 
     @ZenClass("mods.fallingalchemy.ConversionBuilder")
@@ -190,6 +203,49 @@ public class FallingAlchemyTweaker {
 
         public ConversionBuilder(ConversionRule rule) {
             this.rule = rule;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setRadius(double radius) {
+            this.rule.radius = (float) radius;
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setSuccessChance(double chance) {
+            this.rule.successChance = (float) MathHelper.clamp(chance, 0.0, 1.0);
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setKeepBlockChance(double chance) {
+            this.rule.keepBlockChance = (float) MathHelper.clamp(chance, 0.0, 1.0);
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setPriority(int priority) {
+            this.rule.priority = priority;
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setDisplacement(double displacement, @Optional boolean additionalProducts) {
+            this.rule.displacement = (float) displacement;
+            this.rule.additionalProducts = additionalProducts;
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setSingle(boolean single) {
+            this.rule.onlyOne = single;
+            return this;
+        }
+
+        @ZenMethod
+        public ConversionBuilder setRescueItems(boolean rescue) {
+            this.rule.rescueItems = rescue;
+            return this;
         }
 
         @ZenMethod
@@ -251,7 +307,6 @@ public class FallingAlchemyTweaker {
         public ConversionBuilder addMoonPhaseCondition(int moonPhase) {
             ICondition condition = ((world, pos) -> moonPhase == world.getMoonPhase());
             rule.conditions.add(condition);
-
             rule.conditionInfos.add(new ConditionInfo(condition, "moon", String.valueOf(moonPhase)));
             return this;
         }
@@ -290,25 +345,18 @@ public class FallingAlchemyTweaker {
                         (!finalRequireRaining && !isRaining);
             };
             rule.conditions.add(condition);
-
-            String weatherKey;
-            if (finalRequireThundering) {
-                weatherKey = "thunder";
-            } else if (finalRequireRaining) {
-                weatherKey = "rain";
-            } else {
-                weatherKey = "clear";
-            }
-            rule.conditionInfos.add(new ConditionInfo(condition, "weather", weatherKey));
+            rule.conditionInfos.add(new ConditionInfo(condition, "weather", finalRequireThundering ? "thunder" : (finalRequireRaining ? "rain" : "clear")));
             return this;
         }
 
         @ZenMethod
-        public void register() {
+        public void register(@Optional String id) {
+            if (id != null) {
+                this.rule.id = id;
+            }
             RULES.compute(rule.triggerBlock, (k, v) -> {
                 if (v == null) v = new ArrayList<>();
                 v.add(rule);
-                // 注册时排序
                 v.sort(ConversionRule::compareTo);
                 return v;
             });

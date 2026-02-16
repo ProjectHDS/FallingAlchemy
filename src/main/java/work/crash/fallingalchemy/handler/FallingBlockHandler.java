@@ -1,16 +1,19 @@
 package work.crash.fallingalchemy.handler;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityFallingBlock;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import work.crash.fallingalchemy.event.FallingConversionEvent;
 import work.crash.fallingalchemy.modsupport.FallingAlchemyTweaker;
 import work.crash.fallingalchemy.item.ConsumedItem;
 
@@ -46,9 +49,12 @@ public class FallingBlockHandler {
             while (iterator.hasNext()) {
                 EntityFallingBlock block = iterator.next().get();
                 if (block == null || block.isDead) {
-                    BlockPos pos = new BlockPos(block.posX, block.posY, block.posZ);
-                    if (event.world.getBlockState(pos).getBlock() == block.getBlock().getBlock()) {
-                        processConversion(event.world, blockPosition.get(block), pos, block.getBlock().getBlock());
+                    if (block != null) {
+                        BlockPos pos = new BlockPos(block.posX, block.posY, block.posZ);
+                        IBlockState state = event.world.getBlockState(pos);
+                        if (state.getBlock() == block.getBlock().getBlock()) {
+                            processConversion(event.world, blockPosition.get(block), pos, state);
+                        }
                     }
                     iterator.remove();
                 }
@@ -56,19 +62,31 @@ public class FallingBlockHandler {
         }
     }
 
-    private void processConversion(World world, BlockPos oriPos, BlockPos pos, Block triggerBlock) {
+    private void processConversion(World world, BlockPos oriPos, BlockPos pos, IBlockState state) {
+        Block triggerBlock = state.getBlock();
         List<FallingAlchemyTweaker.ConversionRule> rules = FallingAlchemyTweaker.RULES.getOrDefault(triggerBlock, Collections.emptyList());
+
+        if (rules.isEmpty()) return;
 
         List<FallingAlchemyTweaker.ConversionRule> sortedRules = rules.stream().sorted(FallingAlchemyTweaker.ConversionRule::compareTo).collect(Collectors.toList());
 
         ruleLoop:
         for (FallingAlchemyTweaker.ConversionRule rule : sortedRules) {
-            if (!rule.conditions.stream().allMatch(cond -> cond.test(world, pos))) continue;
+            if (!rule.conditions.stream().allMatch(cond -> cond.test(world, pos))) {
+                continue;
+            }
 
             AxisAlignedBB area = new AxisAlignedBB(pos).grow(rule.radius);
             List<EntityItem> allItems = world.getEntitiesWithinAABB(EntityItem.class, area);
 
-            // 计算每个消耗品的可用次数
+            if (rule.rescueItems) {
+                for (EntityItem entityItem : allItems) {
+                    if (entityItem.isDead) {
+                        entityItem.isDead = false;
+                    }
+                }
+            }
+
             int multiplier = Integer.MAX_VALUE;
             for (ConsumedItem consumed : rule.consumedItems) {
                 int total = 0;
@@ -77,67 +95,94 @@ public class FallingBlockHandler {
                         total += item.getItem().getCount();
                     }
                 }
+
                 if (total < consumed.requiredCount) {
-                    continue ruleLoop; // 不满足条件，跳过该规则
+                    continue ruleLoop;
                 }
                 multiplier = Math.min(multiplier, total / consumed.requiredCount);
             }
 
             if (multiplier <= 0) continue;
-            // 避免无消耗物时multiplier异常
             if (rule.consumedItems.isEmpty()) {
                 multiplier = 1;
             }
 
-            // 计算位移是否满足要求
+            if (rule.onlyOne) {
+                multiplier = 1;
+            }
+
             if (positionDistance(oriPos, pos) < rule.displacement) {
                 continue;
             }
 
-            // 扣除每个消耗品
-            for (ConsumedItem consumed : rule.consumedItems) {
-                int required = consumed.requiredCount * multiplier;
-                List<EntityItem> matchingItems = allItems.stream().filter(item -> consumed.matches(item.getItem())).collect(Collectors.toList());
-
-                int remaining = required;
-                for (EntityItem item : matchingItems) {
-                    ItemStack stack = item.getItem();
-                    int taken = Math.min(remaining, stack.getCount());
-                    stack.shrink(taken);
-                    remaining -= taken;
-
-                    if (stack.isEmpty()) {
-                        item.setDead();
-                    } else {
-                        item.setItem(stack);
-                    }
-
-                    if (remaining <= 0) break;
-                }
-            }
-
-            if (world.rand.nextFloat() > rule.successChance) {
-                rule.playFailureSound(world, pos); // 成功率判定失败
-                continue;
-            }
-
-            // 生成产物
+            List<ItemStack> preparedOutputs = new ArrayList<>();
             int finalMultiplier = multiplier;
             rule.outputs.forEach(output -> {
                 ItemStack spawnedStack = output.copy();
-                //
                 if (rule.displacement > 0 && positionDistance(oriPos, pos) > rule.displacement && rule.additionalProducts) {
                     spawnedStack.setCount((int) ((positionDistance(oriPos, pos) - rule.displacement) + (spawnedStack.getCount() * finalMultiplier)));
                 } else {
                     spawnedStack.setCount(spawnedStack.getCount() * finalMultiplier);
                 }
-                EntityItem newItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 0.2, pos.getZ() + 0.5, spawnedStack);
+                preparedOutputs.add(spawnedStack);
+            });
+
+            FallingConversionEvent.Pre preEvent = new FallingConversionEvent.Pre(world, pos, state, preparedOutputs, rule);
+            if (MinecraftForge.EVENT_BUS.post(preEvent)) {
+                continue;
+            }
+
+            for (ConsumedItem consumed : rule.consumedItems) {
+                int required = consumed.requiredCount * multiplier;
+                List<EntityItem> matchingItems = allItems.stream().filter(item -> consumed.matches(item.getItem())).collect(Collectors.toList());
+
+                int remainingToConsume = required;
+                for (EntityItem item : matchingItems) {
+                    ItemStack stack = item.getItem();
+                    int originalCount = stack.getCount();
+                    boolean wasDead = item.isDead;
+
+                    int taken = Math.min(remainingToConsume, originalCount);
+                    stack.shrink(taken);
+                    remainingToConsume -= taken;
+
+                    if (stack.isEmpty()) {
+                        item.setDead();
+                    } else {
+                        item.setItem(stack);
+                        if (rule.rescueItems && wasDead) {
+                            EntityItem newEntity = new EntityItem(world, item.posX, item.posY, item.posZ, stack.copy());
+                            newEntity.motionX = item.motionX;
+                            newEntity.motionY = item.motionY;
+                            newEntity.motionZ = item.motionZ;
+                            newEntity.setDefaultPickupDelay();
+                            newEntity.setNoDespawn();
+                            world.spawnEntity(newEntity);
+                        }
+                    }
+
+                    if (remainingToConsume <= 0) break;
+                }
+            }
+
+            if (world.rand.nextFloat() > rule.successChance) {
+                rule.playFailureSound(world, pos);
+                continue;
+            }
+
+            preEvent.getOutputs().forEach(stack -> {
+                EntityItem newItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 0.2, pos.getZ() + 0.5, stack);
                 newItem.setDefaultPickupDelay();
                 newItem.motionY = 0.1;
+                if (rule.rescueItems) {
+                    newItem.setNoDespawn();
+                }
                 world.spawnEntity(newItem);
             });
+
             rule.playSuccessSound(world, pos);
-            // 是否消耗方块
+            MinecraftForge.EVENT_BUS.post(new FallingConversionEvent.Post(world, pos, state, preEvent.getOutputs(), rule));
+
             if (world.rand.nextFloat() >= rule.keepBlockChance) {
                 world.setBlockToAir(pos);
             }

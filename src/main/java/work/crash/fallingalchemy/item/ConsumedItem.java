@@ -9,15 +9,20 @@ import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.oredict.OreDictionary;
 import stanhebben.zenscript.annotations.ZenClass;
+import stanhebben.zenscript.annotations.ZenProperty;
 
 import java.util.List;
 
 @ZenRegister
 @ZenClass("mods.fallingalchemy.ConsumedItem")
 public class ConsumedItem {
+    @ZenProperty
     public final IIngredient ingredient;
+    @ZenProperty
     public final int requiredCount;
+    @ZenProperty
     public final boolean matchNBT;
+    @ZenProperty
     public final boolean fuzzyNBT;
 
     public ConsumedItem(IIngredient ingredient, int count, boolean matchNBT, boolean fuzzyNBT) {
