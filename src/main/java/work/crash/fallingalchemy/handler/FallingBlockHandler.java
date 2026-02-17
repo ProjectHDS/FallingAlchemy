@@ -35,8 +35,10 @@ public class FallingBlockHandler {
         if (event.getEntity() instanceof EntityFallingBlock block) {
             Block blockType = block.getBlock().getBlock();
             if (FallingAlchemyTweaker.RULES.containsKey(blockType)) {
-                trackedBlocks.add(new WeakReference<>(block));
-                blockPosition.put(block, block.getPosition());
+                if (blockPosition.get(block) == null) {
+                    trackedBlocks.add(new WeakReference<>(block));
+                    blockPosition.put(block, block.getPosition());
+                }
             }
         }
     }
@@ -52,8 +54,9 @@ public class FallingBlockHandler {
                     if (block != null) {
                         BlockPos pos = new BlockPos(block.posX, block.posY, block.posZ);
                         IBlockState state = event.world.getBlockState(pos);
-                        if (state.getBlock() == block.getBlock().getBlock()) {
-                            processConversion(event.world, blockPosition.get(block), pos, state);
+                        BlockPos originPos = blockPosition.remove(block);
+                        if (originPos != null && state.getBlock() == block.getBlock().getBlock()) {
+                            processConversion(event.world, originPos, pos, state);
                         }
                     }
                     iterator.remove();
